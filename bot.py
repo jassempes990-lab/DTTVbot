@@ -1,82 +1,66 @@
 import telebot
 import requests
-import os
 from flask import Flask
 from threading import Thread
-from telebot.types import BotCommand
 
-# إعداد توكن البوت
-BOT_TOKEN = "8418374521:AAHRYTwDL9BErCaTYqIwjVjZifZE5LkiC-w"
-bot = telebot.TeleBot(BOT_TOKEN)
+# توكن البوت الخاص بك
+TOKEN = "7334710403:AAH_18-4v-iS6VwXw8R1K_N_5hSAs_xOfc0"
+bot = telebot.TeleBot(TOKEN)
 
-# معرف القناة للتحقق من الاشتراك
-CHANNEL_ID = "@cr7_cris07"
-
-# نص الاشتراك المنسق
-sub_message = (
-    "عذرا عزيزي المستخدم ⚠️\n\n"
-    "يجب عليك الأشتراك في هذه القناة أولاً لأستعمال البوت:\n"
-    "👉 https://t.me/cr7_cris07nn"
-    "بعد الاشتراك، اضغط على زر /start من القائمة بالأسفل 🚀"
-)
-
-def set_bot_commands():
-    try:
-        commands = [
-            BotCommand("start", "لتشغيل البوت والتحقق من الاشتراك 🚀")
-        ]
-        bot.set_my_commands(commands)
-        print("تم تفعيل قائمة الأوامر (Menu) بنجاح!")
-    except Exception as e:
-        print(f"فشل في إعداد قائمة الأوامر: {e}")
+# قناة الاشتراك الإجباري (بدون @)
+CHANNEL_USERNAME = "u_p_6"
 
 def is_subscribed(user_id):
     try:
-        status = bot.get_chat_member(CHANNEL_ID, user_id).status
-        return status in ['member', 'administrator', 'creator']
-    except:
+        member = bot.get_chat_member(f"@{CHANNEL_USERNAME}", user_id)
+        if member.status in ['creator', 'administrator', 'member']:
+            return True
         return False
+    except Exception as e:
+        print(f"Error checking subscription: {e}")
+        return True
 
 @bot.message_handler(commands=['start'])
-def send_welcome(message):
-    if is_subscribed(message.from_user.id):
-        bot.reply_to(message, "أهلاً بك في بوت DTTVbot! 🤖🎬\nأرسل لي رابط فيديو تيك توك وسأقوم بتحميله بدون علامة مائية فوراً.")
-    else:
+def welcome(message):
+    if not is_subscribed(message.from_user.id):
+        sub_message = f"⚠️ عذراً! يجب عليك الاشتراك في قناة البوت أولاً لتتمكن من استخدامه.\n\nاضغط هنا: @{CHANNEL_USERNAME}\n\nبعد الاشتراك، أرسل /start مرة أخرى."
         bot.reply_to(message, sub_message)
+        return
+
+    bot.reply_to(message, "أهلاً بك في بوت DTTVbot! 🤖🎬\nأرسل لي رابط فيديو تيك توك وسأقوم بتحميله بدون علامة مائية فوراً.")
 
 @bot.message_handler(func=lambda message: True)
 def handle_tiktok(message):
     if not is_subscribed(message.from_user.id):
+        sub_message = f"⚠️ عذراً! يجب عليك الاشتراك في قناة البوت أولاً لتتمكن من استخدامه.\n\nاضغط هنا: @{CHANNEL_USERNAME}"
         bot.reply_to(message, sub_message)
         return
 
     url = message.text
     if "tiktok.com" in url:
-        status_msg = bot.reply_to(message, "جاري معالجة الفيديو... انتظر لحظة ⏳")
+        status_msg = bot.reply_to(message, "⏳ جاري معالجة الفيديو... انتظر لحظة")
         try:
-            # استخدام API قوي ومباشر (يعمل على ريندر بدون حظر وبدون بروكسي)
             api_url = f"https://api.tiklydown.eu.org/api/download?url={url}"
             response = requests.get(api_url, timeout=15).json()
-            
+
             if "video" in response and "noWatermark" in response["video"]:
                 video_url = response["video"]["noWatermark"]
-                video_title = response.get("title", "TikTok Video")
-                caption_text = f"🎬 {video_title}\n\n🤖 تم التحميل بواسطة: DTTVbot"
+                video_title = response.get("title", "فيديو TikTok")
+                caption_text = f"🎬 {video_title}\n\nتم التحميل بواسطة: @DTTVbot"
                 
-                # إرسال الفيديو وحذف رسالة الانتظار
-                bot.send_video(message.chat.id, video_url, caption=caption_text)
-                bot.send_message(message.chat.id, "لا شكر على واجب 🌹")
+                bot.send_video(message.chat.id, video_url, caption=caption_text, reply_to_message_id=message.message_id)
                 bot.delete_message(message.chat.id, status_msg.message_id)
             else:
-                bot.edit_message_text("عذراً، تعذر سحب هذا الفيديو. قد يكون الحساب خاصاً أو الرابط غير صحيح.", message.chat.id, status_msg.message_id)
+                bot.edit_message_text("❌ لم نتمكن من جلب الفيديو، تأكد أن الحساب ليس خاصاً أو الرابط صحيح.", message.chat.id, status_msg.message_id)
         except Exception as e:
-            bot.edit_message_text("حدث خطأ أثناء محاولة جلب الفيديو، يرجى إعادة المحاولة لاحقاً.", message.chat.id, status_msg.message_id)
-            print(f"الخطأ الداخلي: {e}")
+            bot.edit_message_text("❌ حدث خطأ أثناء محاولة جلب الفيديو، يرجى إعادة المحاولة لاحقاً.", message.chat.id, status_msg.message_id)
+            print(f"Internal Error: {e}")
     else:
-        bot.reply_to(message, "عذراً، يرجى إرسال رابط تيك توك صحيح فقط. ⚠️")
+        bot.reply_to(message, "⚠️ عذراً، يرجى إرسال رابط تيك توك صحيح فقط.")
 
-# كود إضافي مخصص لمنصة Render لإبقاء البوت حياً وشغالاً 24 ساعة بدون توقف
+# كود إضافي مخصص لمنصة Render لإبقاء البوت حياً
 app = Flask('')
+
 @app.route('/')
 def home():
     return "البوت شغال 100%"
@@ -89,8 +73,6 @@ def keep_alive():
     t.start()
 
 if __name__ == "__main__":
-    set_bot_commands()
     keep_alive()
-    print("البوت يعمل الآن بنجاح على منصة Render...")
+    print("البوت بدأ العمل الآن بنجاح...")
     bot.infinity_polling()
-      
